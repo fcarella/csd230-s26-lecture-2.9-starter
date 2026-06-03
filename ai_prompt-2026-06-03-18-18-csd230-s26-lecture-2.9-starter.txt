@@ -1,6 +1,6 @@
 CONTEXT FOR AI MODEL
 Generated from: C:\Users\fcarella\IdeaProjects\csd230\s26\lecture-2.9-in-class-exercise\csd230-s26-lecture-2.9-starter
-Timestamp: 2026-06-03-17-13
+Timestamp: 2026-06-03-18-18
 
 --- PROJECT STRUCTURE ---
 |-- csd230-s26-lecture-2.9-starter/
@@ -23,6 +23,8 @@ Timestamp: 2026-06-03-17-13
                     |-- Application.java
                     |-- config/
                         |-- WebSecurityConfig.java
+                    |-- controllers/
+                        |-- LoginController.java
                     |-- entities/
                         |-- BookEntity.java
                         |-- CartEntity.java
@@ -45,8 +47,13 @@ Timestamp: 2026-06-03-17-13
                     |-- services/
                         |-- CustomUserDetailsService.java
             |-- resources/
+                |-- application-h2.properties
+                |-- application-mysql.properties
                 |-- application.properties
                 |-- static/
+                    |-- index.html
+                |-- templates/
+                    |-- login.html
         |-- test/
             |-- java/
                 |-- app/
@@ -64,6 +71,8 @@ Timestamp: 2026-06-03-17-13
 --- FILE: .gitignore ---
 ```
 HELP.md
+volumes/
+
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -494,6 +503,10 @@ If you manually switch to a different parent and actually want the inheritance, 
             <artifactId>javafaker</artifactId>
             <version>1.0.2</version>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
 
     </dependencies>
 
@@ -602,19 +615,48 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class WebSecurityConfig {
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        // These paths are essential for the REST lab
-                        .requestMatchers("/api/rest/**", "/swagger-ui/**", "/v3/api-docs/**", "/error").permitAll()
+                        .requestMatchers("/h2-console/**", "/login", "/css/**", "/js/**", "/error", "/").permitAll()
+                        .requestMatchers("/api/rest/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
                 )
-                .formLogin(form -> form.permitAll())
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/rest/**")); // VITAL for POST/PUT
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .defaultSuccessUrl("/", true)
+                        .permitAll()
+                )
+                .logout(logout -> logout
+                        .logoutUrl("/logout")              // The URL to trigger logout
+                        .logoutSuccessUrl("/login?logout") // Where to go after
+                        .permitAll()
+                )
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
+                // CRITICAL FIX: Add /logout to the ignoring list
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**", "/api/rest/**", "/logout"));
 
         return http.build();
+    }
+
+}
+```
+
+--- FILE: src/main/java/app/controllers/LoginController.java ---
+```
+package app.controllers;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class LoginController {
+
+    @GetMapping("/login")
+    public String login() {
+        // This returns the name of the template: src/main/resources/templates/login.html
+        return "login";
     }
 }
 ```
@@ -1232,10 +1274,170 @@ public class CustomUserDetailsService implements UserDetailsService {
 
 ```
 
+--- FILE: src/main/resources/application-h2.properties ---
+```
+# Database Connection
+spring.datasource.url=jdbc:h2:mem:csd230
+spring.datasource.driverClassName=org.h2.Driver
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=create-drop
+
+# H2 Console Settings
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+spring.h2.console.settings.web-allow-others=true
+
+# Fix for the "Refused to display in a frame" error
+# Use this specific naming for Spring Boot 3.x/4.x
+spring.h2.console.settings.click-through-protection=false
+```
+
+--- FILE: src/main/resources/application-mysql.properties ---
+```
+# Change this line:
+spring.datasource.url=jdbc:mysql://localhost:3307/csd230?createDatabaseIfNotExist=true
+
+spring.datasource.username=root
+spring.datasource.password=itstudies12345
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# Keep these as they are:
+spring.jpa.hibernate.ddl-auto=create
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+```
+
 --- FILE: src/main/resources/application.properties ---
 ```
 spring.application.name=csd230-s26-lecture-2.9-starter
+server.port=8080
 
+# Default to MySql if no profile is selected
+# see appli cation-mysql.properties
+#spring.profiles.active=h2
+#spring.profiles.active=mysql
+# Switch between "dev" (H2) and "mysql" (Docker) here:
+spring.profiles.active=h2
+
+
+
+```
+
+--- FILE: src/main/resources/static/index.html ---
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSD230 Lecture 2.9 Starter</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+        .nav { margin-bottom: 30px; padding: 15px; background: #e9ecef; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 500px; }
+        code { background: #eee; padding: 2px 5px; border-radius: 4px; font-family: monospace; color: #d63384; }
+        button { cursor: pointer; padding: 8px 20px; background-color: #dc3545; color: white; border: none; border-radius: 4px; font-weight: bold; }
+        button:hover { background-color: #bb2d3b; }
+        h2 { color: #0d6efd; border-bottom: 2px solid #0d6efd; padding-bottom: 5px; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin-bottom: 10px; }
+        a { text-decoration: none; color: #0d6efd; font-weight: bold; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <span><strong>CSD230:</strong> Advanced Web Applications</span>
+    <form action="/logout" method="post" style="display: inline;">
+        <button type="submit">Sign Out</button>
+    </form>
+</div>
+
+<h1>Lecture 2.9: REST API Backend</h1>
+<p>The server is running. Use the links below to explore the API and Database.</p>
+
+<div class="card">
+    <h2>Developer Tools</h2>
+    <ul>
+        <li>🚀 <a href="/swagger-ui/index.html">Interactive API Documentation (Swagger)</a></li>
+        <li>Storage <a href="/h2-console">H2 Database Console</a></li>
+    </ul>
+
+    <hr>
+
+    <h3>H2 Console Credentials</h3>
+    <p>Use these settings to log in when the <code>h2</code> profile is active:</p>
+    <ul>
+        <li><strong>Driver Class:</strong> <code>org.h2.Driver</code></li>
+        <li><strong>JDBC URL:</strong> <code>jdbc:h2:mem:csd230</code></li>
+        <li><strong>User Name:</strong> <code>sa</code></li>
+        <li><strong>Password:</strong> (leave blank)</li>
+    </ul>
+</div>
+
+</body>
+</html>
+```
+
+--- FILE: src/main/resources/templates/login.html ---
+```
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Sign In - CSD230</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f8f9fa; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { color: #0d6efd; margin-top: 0; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #0d6efd; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #0b5ed7; }
+        .error { color: #dc3545; text-align: center; margin-bottom: 15px; font-size: 0.9em; }
+        .info-box { margin-top: 25px; padding: 15px; background-color: #e9ecef; border-radius: 5px; font-size: 0.85em; }
+        .info-box h4 { margin: 0 0 10px 0; color: #495057; border-bottom: 1px solid #dee2e6; }
+        code { background: #fff; padding: 2px 4px; border-radius: 3px; color: #d63384; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <h2>Lecture 2.9 Login</h2>
+
+    <!-- Error Message -->
+    <div th:if="${param.error}" class="error">
+        Invalid username or password.
+    </div>
+
+    <!-- Login Form -->
+    <form th:action="@{/login}" method="post">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" name="username" placeholder="e.g. admin" required autofocus>
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" name="password" placeholder="e.g. admin" required>
+        </div>
+        <button type="submit">Sign In</button>
+    </form>
+
+    <!-- Credential Cheat Sheet -->
+    <div class="info-box">
+        <h4>🔑 Default App Credentials</h4>
+        <p>User: <code>admin</code> / Pass: <code>admin</code></p>
+        <p>User: <code>user</code> / Pass: <code>user</code></p>
+
+        <h4>Storage H2 Console Settings</h4>
+        <p>JDBC URL: <code>jdbc:h2:mem:csd230</code></p>
+        <p>User: <code>sa</code> / Pass: (blank)</p>
+    </div>
+</div>
+
+</body>
+</html>
 ```
 
 --- FILE: src/test/java/app/ApplicationTests.java ---
