@@ -1,7 +1,7 @@
 package app.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore; // VITAL IMPORT
 import jakarta.persistence.*;
-
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.Set;
@@ -16,15 +16,18 @@ public abstract class ProductEntity implements Serializable, SaleableItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ... existing fields (id, productId) ...
-
     @ManyToMany(mappedBy = "products")
+    @JsonIgnore // FIX: Prevents infinite recursion with CartEntity
     private Set<CartEntity> carts = new java.util.HashSet<>();
+
+    @JsonIgnore // Optional: Hide UUID internal field from JSON output to keep it clean
     private String productId;
 
     public ProductEntity() {
         setProductId(UUID.randomUUID().toString());
     }
+
+    // ... Keep Getters and Setters ...
 
     public Set<CartEntity> getCarts() {
         return carts;
@@ -42,7 +45,6 @@ public abstract class ProductEntity implements Serializable, SaleableItem {
         this.id = id;
     }
 
-    // Getters and Setters
     public String getProductId() {
         return productId;
     }
@@ -71,11 +73,8 @@ public abstract class ProductEntity implements Serializable, SaleableItem {
                 '}';
     }
 
-    // This allows Thymeleaf to access "${product.productType}"
-    // It returns the name of the Java class (e.g., "BookEntity")
+    // Allows Thymeleaf/JSON to see simple class name
     public String getProductType() {
         return this.getClass().getSimpleName();
     }
-
-
 }
